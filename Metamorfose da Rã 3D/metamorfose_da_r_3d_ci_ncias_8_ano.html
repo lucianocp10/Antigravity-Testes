@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Metamorfose da Rã 3D — Ciências 8º Ano</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0b1924;
+      color: #f1f5f9;
+      overflow-x: hidden;
+    }
+    #canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 360px;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 25%, #1e4d6b 0%, #0b1924 100%);
+      touch-action: none;
+    }
+    #canvas-wrap canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* Custom range slider */
+    input[type="range"].timeline-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8 0%, #34d399 55%, #10b981 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"].timeline-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #10b981;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+      cursor: grab;
+      transition: transform 0.15s ease;
+    }
+    input[type="range"].timeline-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    input[type="range"].timeline-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #10b981;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+      cursor: grab;
+    }
+    .pin-marker {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      transition: opacity 0.2s ease, transform 0.15s ease;
+      z-index: 15;
+    }
+    .pin-marker:hover {
+      transform: translate(-50%, -105%) scale(1.06);
+      z-index: 25;
+    }
+    .glass-panel {
+      background: rgba(15, 31, 46, 0.84);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    /* Custom scrollbar for side drawer */
+    .nice-scroll::-webkit-scrollbar { width: 6px; }
+    .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+    .nice-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden">
+
+  <!-- Top Header -->
+  <header class="flex items-center justify-between px-4 py-2.5 bg-slate-900/95 border-b border-slate-700/70 shrink-0 z-30 gap-2 flex-wrap">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-xl shrink-0" aria-hidden="true">🐸</div>
+      <div class="min-w-0">
+        <h1 class="text-sm sm:text-base font-bold text-white leading-tight truncate">
+          Metamorfose da Rã em 3D
+        </h1>
+        <p class="text-[11px] sm:text-xs text-slate-300 truncate">
+          Ciências 8º Ano • Reprodução Animal: Desenvolvimento Direto e Indireto
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="btn-toggle-pins" type="button"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-500/20 text-sky-200 border border-sky-400/40 hover:bg-sky-500/30 transition flex items-center gap-1.5">
+        <span>📍</span>
+        <span id="pins-label">Rótulos 3D: Ligados</span>
+      </button>
+      <button id="btn-projector" type="button"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-600 hover:bg-slate-700 transition flex items-center gap-1.5"
+        title="Ocultar ou mostrar painel lateral para projeção em sala">
+        <span>🖥️</span>
+        <span id="projector-label">Modo Projetor</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden relative">
+
+    <!-- Left/Center: 3D Viewport + Controls -->
+    <section class="flex-1 flex flex-col min-w-0 min-h-0 relative">
+      <div id="canvas-wrap" class="flex-1 relative">
+        <!-- Fallback if WebGL/Three fails -->
+        <div id="webgl-fallback" class="hidden absolute inset-0 flex items-center justify-center p-6 text-center bg-slate-900/95 z-40">
+          <div class="max-w-md glass-panel rounded-2xl p-6">
+            <p class="text-lg font-bold text-amber-300 mb-2">Não foi possível iniciar o cenário 3D</p>
+            <p class="text-sm text-slate-300">Verifique se o navegador tem suporte a WebGL e conexão para carregar a biblioteca Three.js.</p>
+          </div>
+        </div>
+
+        <!-- Floating Stage Badge (Top-Left) -->
+        <div class="absolute top-3 left-3 z-20 pointer-events-none max-w-[calc(100%-1.5rem)] sm:max-w-md">
+          <div class="glass-panel rounded-xl px-3.5 py-2.5 shadow-lg pointer-events-auto">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span id="hud-stage-badge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/25 text-emerald-300 border border-emerald-400/30">
+                Estágio 1 de 6
+              </span>
+              <span id="hud-percent" class="text-xs font-mono font-semibold text-sky-300">0%</span>
+            </div>
+            <h2 id="hud-stage-title" class="text-sm sm:text-base font-bold text-white leading-snug">
+              Ovo e Fecundação Externa
+            </h2>
+            <p id="hud-stage-short" class="text-xs text-slate-300 mt-0.5 leading-relaxed">
+              Massa gelatinosa na água protege os embriões em desenvolvimento.
+            </p>
+          </div>
+        </div>
+
+        <!-- Floating Camera Presets (Top-Right) -->
+        <div class="absolute top-3 right-3 z-20 hidden sm:flex flex-col gap-1.5">
+          <div class="glass-panel rounded-xl p-1.5 flex flex-col gap-1 shadow-lg">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-2 pt-0.5">Câmera</span>
+            <button type="button" data-cam="overview" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-left bg-emerald-500/25 text-emerald-200 border border-emerald-400/40 transition">
+              🌿 Lagoa Geral
+            </button>
+            <button type="button" data-cam="focus" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-left text-slate-200 hover:bg-slate-700/60 border border-transparent transition">
+              🔍 Foco no Animal
+            </button>
+            <button type="button" data-cam="underwater" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-left text-slate-200 hover:bg-slate-700/60 border border-transparent transition">
+              🌊 Subaquático
+            </button>
+            <button type="button" data-cam="surface" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-left text-slate-200 hover:bg-slate-700/60 border border-transparent transition">
+              ☀️ Margem / Folha
+            </button>
+          </div>
+        </div>
+
+        <!-- Hint for orbit -->
+        <div class="absolute bottom-3 left-3 z-10 pointer-events-none hidden sm:block">
+          <span class="px-2.5 py-1 rounded-lg text-[11px] bg-slate-900/70 text-slate-300 border border-slate-700/60">
+            Arraste para girar 360° • Roda do mouse para zoom
+          </span>
+        </div>
+
+        <!-- Selected Pin Toast -->
+        <div id="pin-toast" class="hidden absolute bottom-3 right-3 z-20 max-w-xs glass-panel rounded-xl p-3 shadow-xl border border-sky-400/40">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p id="pin-toast-title" class="text-xs font-bold text-sky-300"></p>
+              <p id="pin-toast-desc" class="text-xs text-slate-200 mt-1 leading-relaxed"></p>
+            </div>
+            <button id="pin-toast-close" type="button" class="text-slate-400 hover:text-white text-sm leading-none px-1">✕</button>
+          </div>
+        </div>
+
+        <!-- 3D Projected Pins Container -->
+        <div id="pins-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-10"></div>
+      </div>
+
+      <!-- Bottom Playback & Timeline Bar -->
+      <div class="bg-slate-900/95 border-t border-slate-700/80 px-3 sm:px-5 py-3 shrink-0 z-20">
+        <div class="max-w-5xl mx-auto flex flex-col gap-2.5">
+          <!-- Stage Quick Buttons -->
+          <div id="stage-pills" class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            <button type="button" data-stage="0" class="stage-pill px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition truncate">
+              1. Ovos
+            </button>
+            <button type="button" data-stage="1" class="stage-pill px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition truncate">
+              2. Brânquias Ext.
+            </button>
+            <button type="button" data-stage="2" class="stage-pill px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition truncate">
+              3. Girino
+            </button>
+            <button type="button" data-stage="3" class="stage-pill px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition truncate">
+              4. Patas Tras.
+            </button>
+            <button type="button" data-stage="4" class="stage-pill px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition truncate">
+              5. Imago
+            </button>
+            <button type="button" data-stage="5" class="stage-pill px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition truncate">
+              6. Rã Adulta
+            </button>
+          </div>
+
+          <!-- Slider + Play Controls -->
+          <div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button id="btn-play" type="button"
+                class="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center gap-1.5 shadow-md">
+                <span id="play-icon">▶</span>
+                <span id="play-text">Reproduzir</span>
+              </button>
+              <button id="btn-reset" type="button"
+                class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-semibold transition"
+                title="Voltar ao início (0%)">
+                ↺ Reiniciar
+              </button>
+            </div>
+
+            <div class="flex-1 min-w-[160px] flex items-center gap-2.5">
+              <input id="timeline-slider" type="range" min="0" max="100" step="0.2" value="0"
+                class="timeline-slider" aria-label="Linha do tempo da metamorfose" />
+            </div>
+
+            <div class="flex items-center gap-1 shrink-0 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+              <span class="text-[11px] text-slate-400 px-1.5 hidden sm:inline">Velocidade:</span>
+              <button type="button" data-speed="0.5" class="speed-btn px-2 py-1 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">0.5x</button>
+              <button type="button" data-speed="1" class="speed-btn px-2 py-1 rounded-lg text-xs font-semibold bg-sky-500/30 text-sky-200 border border-sky-400/40 transition">1x</button>
+              <button type="button" data-speed="2" class="speed-btn px-2 py-1 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">2x</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Educational Drawer -->
+    <aside id="edu-drawer" class="w-full lg:w-[400px] xl:w-[430px] h-[44vh] lg:h-full bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-700/80 flex flex-col shrink-0 z-20">
+      <!-- Tabs -->
+      <nav class="grid grid-cols-3 border-b border-slate-700/80 bg-slate-950/50 shrink-0" aria-label="Conteúdo didático">
+        <button type="button" data-tab="metamorfose" class="tab-btn py-2.5 px-2 text-xs font-bold border-b-2 border-emerald-400 text-emerald-300 bg-slate-900/70 transition">
+          🐸 Metamorfose
+        </button>
+        <button type="button" data-tab="comparacao" class="tab-btn py-2.5 px-2 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          🧬 Direto vs Indireto
+        </button>
+        <button type="button" data-tab="quiz" class="tab-btn py-2.5 px-2 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          📝 Quiz (8º Ano)
+        </button>
+      </nav>
+
+      <!-- Tab Panels -->
+      <div class="flex-1 overflow-y-auto nice-scroll p-4 space-y-4">
+
+        <!-- TAB 1: Metamorfose Atual -->
+        <div id="panel-metamorfose" class="tab-panel space-y-4">
+          <div class="rounded-xl bg-slate-800/70 border border-slate-700 p-3.5">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span id="detail-badge" class="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Estágio 1</span>
+              <span id="detail-time" class="text-[11px] font-medium text-slate-400">Fase embrionária</span>
+            </div>
+            <h3 id="detail-title" class="text-base font-bold text-white mb-1.5">Ovo e Fecundação Externa</h3>
+            <p id="detail-desc" class="text-xs sm:text-sm text-slate-300 leading-relaxed"></p>
+          </div>
+
+          <!-- Physiological Indicators -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="rounded-xl bg-slate-800/50 border border-slate-700/70 p-3">
+              <p class="text-[11px] font-semibold text-sky-300 uppercase tracking-wide">Respiração</p>
+              <p id="stat-respiration" class="text-xs font-medium text-slate-100 mt-1 leading-snug"></p>
+            </div>
+            <div class="rounded-xl bg-slate-800/50 border border-slate-700/70 p-3">
+              <p class="text-[11px] font-semibold text-amber-300 uppercase tracking-wide">Alimentação</p>
+              <p id="stat-diet" class="text-xs font-medium text-slate-100 mt-1 leading-snug"></p>
+            </div>
+            <div class="rounded-xl bg-slate-800/50 border border-slate-700/70 p-3">
+              <p class="text-[11px] font-semibold text-emerald-300 uppercase tracking-wide">Habitat</p>
+              <p id="stat-habitat" class="text-xs font-medium text-slate-100 mt-1 leading-snug"></p>
+            </div>
+            <div class="rounded-xl bg-slate-800/50 border border-slate-700/70 p-3">
+              <p class="text-[11px] font-semibold text-purple-300 uppercase tracking-wide">Locomoção</p>
+              <p id="stat-locomotion" class="text-xs font-medium text-slate-100 mt-1 leading-snug"></p>
+            </div>
+          </div>
+
+          <!-- Highlighted Curriculum Box -->
+          <div class="rounded-xl bg-emerald-950/40 border border-emerald-500/30 p-3.5">
+            <h4 class="text-xs font-bold text-emerald-300 uppercase tracking-wider mb-1.5">
+              Por que ocorre a metamorfose?
+            </h4>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Nos anfíbios anuros (rãs, sapos e pererecas), o desenvolvimento é <strong class="text-white">indireto</strong>.
+              Hormônios produzidos pela tireoide (como a <strong class="text-white">tiroxina</strong>) coordenam a reabsorção da cauda,
+              o surgimento das patas e a troca das brânquias pelos pulmões, preparando o animal para a vida terrestre.
+            </p>
+          </div>
+        </div>
+
+        <!-- TAB 2: Desenvolvimento Direto vs Indireto -->
+        <div id="panel-comparacao" class="tab-panel hidden space-y-3.5">
+          <div class="rounded-xl bg-slate-800/70 border border-slate-700 p-3.5">
+            <h3 class="text-sm font-bold text-white mb-1">Reprodução e Tipos de Desenvolvimento</h3>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Após a fecundação, o embrião se desenvolve até a fase adulta de duas formas principais no reino animal:
+            </p>
+          </div>
+
+          <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-bold text-emerald-300">Desenvolvimento Indireto</h4>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-200">Com Metamorfose</span>
+            </div>
+            <ul class="text-xs text-slate-200 space-y-1.5 list-disc pl-4 leading-relaxed">
+              <li>O animal nasce em uma <strong class="text-white">fase larval</strong> muito diferente do adulto (ex.: girino nos anfíbios, lagarta nas borboletas).</li>
+              <li>Passa por <strong class="text-white">metamorfose</strong>: conjunto de transformações anatômicas e fisiológicas até a forma adulta.</li>
+              <li>Nos anfíbios, a larva aquática respira por brânquias e o adulto respira por pulmões e pela pele úmida.</li>
+            </ul>
+            <p class="text-[11px] text-emerald-200/90 pt-1">
+              <strong>Exemplos:</strong> Rãs, sapos, pererecas, borboletas, mosquitos e muitos crustáceos.
+            </p>
+          </div>
+
+          <div class="rounded-xl bg-sky-950/35 border border-sky-500/35 p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-bold text-sky-300">Desenvolvimento Direto</h4>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-200">Sem Metamorfose</span>
+            </div>
+            <ul class="text-xs text-slate-200 space-y-1.5 list-disc pl-4 leading-relaxed">
+              <li>O filhote nasce ou eclode do ovo com <strong class="text-white">forma semelhante à do adulto</strong>, apenas menor e sexualmente imaturo.</li>
+              <li>Não há estágio larval nem metamorfose; ocorre apenas crescimento e amadurecimento.</li>
+            </ul>
+            <p class="text-[11px] text-sky-200/90 pt-1">
+              <strong>Exemplos:</strong> Seres humanos, cães, gatos, aves (galinhas) e répteis (tartarugas, lagartos).
+            </p>
+          </div>
+
+          <!-- Summary Table -->
+          <div class="overflow-hidden rounded-xl border border-slate-700">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-800 text-slate-200">
+                <tr>
+                  <th class="p-2.5 font-semibold">Característica</th>
+                  <th class="p-2.5 font-semibold text-sky-300">Direto</th>
+                  <th class="p-2.5 font-semibold text-emerald-300">Indireto</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800 bg-slate-900/60 text-slate-300">
+                <tr>
+                  <td class="p-2.5 font-medium text-white">Fase larval</td>
+                  <td class="p-2.5">Ausente</td>
+                  <td class="p-2.5">Presente (ex.: girino)</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-medium text-white">Metamorfose</td>
+                  <td class="p-2.5">Não ocorre</td>
+                  <td class="p-2.5">Ocorre</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-medium text-white">Filhote vs. Adulto</td>
+                  <td class="p-2.5">Semelhantes</td>
+                  <td class="p-2.5">Muito diferentes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 3: Quiz Interativo -->
+        <div id="panel-quiz" class="tab-panel hidden space-y-3.5">
+          <div class="flex items-center justify-between rounded-xl bg-slate-800/80 border border-slate-700 p-3">
+            <div>
+              <h3 class="text-sm font-bold text-white">Quiz: Ciências 8º Ano</h3>
+              <p class="text-[11px] text-slate-400">Teste seus conhecimentos sobre a metamorfose</p>
+            </div>
+            <div class="text-right">
+              <span id="quiz-score" class="text-sm font-bold text-emerald-300">0 / 5</span>
+              <p class="text-[10px] text-slate-400">Acertos</p>
+            </div>
+          </div>
+
+          <div id="quiz-container" class="space-y-3"></div>
+
+          <button id="btn-quiz-reset" type="button"
+            class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-slate-200 transition">
+            🔄 Refazer Quiz
+          </button>
+        </div>
+
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================
+      // 1. DADOS CIENTÍFICOS E PEDAGÓGICOS (8º ANO)
+      // =========================================================
+      const STAGES = [
+        {
+          id: 0,
+          min: 0,
+          max: 0.12,
+          jumpTo: 0.04,
+          badge: 'Estágio 1 de 6',
+          timeLabel: 'Dias 1 a 5 (Embrião)',
+          title: 'Ovo e Fecundação Externa',
+          short: 'Ovos gelatinosos na água após o amplexo (fecundação externa).',
+          desc: 'Na maioria dos anfíbios, a fecundação é externa: durante o abraço nupcial (amplexo), a fêmea libera os óvulos na água e o macho libera os espermatozoides sobre eles. Os ovos não possuem casca rígida, mas uma cápsula gelatinosa que protege o embrião e exige ambiente aquático ou muito úmido.',
+          respiration: 'Difusão de oxigênio pela membrana do ovo',
+          diet: 'Nutrição pelo vitelo (reserva do ovo)',
+          habitat: 'Aquático (água parada / lagoa)',
+          locomotion: 'Imóvel (aderido à vegetação)',
+          pins: [
+            { key: 'egg', label: 'Cápsula Gelatinosa', desc: 'Protege o embrião contra choques e ressecamento, mantendo-o hidratado na água.' }
+          ]
+        },
+        {
+          id: 1,
+          min: 0.12,
+          max: 0.30,
+          jumpTo: 0.21,
+          badge: 'Estágio 2 de 6',
+          timeLabel: 'Semanas 1 a 2 (Eclosão)',
+          title: 'Girino com Brânquias Externas',
+          short: 'Larva recém-eclodida com cauda natatória e brânquias externas plumosas.',
+          desc: 'Ao eclodir do ovo, nasce o girino — a forma larval do anfíbio. Ele lembra um pequeno peixe: possui corpo alongado, longa cauda com nadadeira e brânquias externas visíveis nas laterais da cabeça para retirar oxigênio dissolvido na água.',
+          respiration: 'Branquial (brânquias externas) e cutânea',
+          diet: 'Herbívora / detritívora (algas e limo)',
+          habitat: 'Totalmente aquático',
+          locomotion: 'Natação por ondulação da cauda',
+          pins: [
+            { key: 'gills', label: 'Brânquias Externas', desc: 'Estruturas plumosas que absorvem oxigênio diretamente da água.' },
+            { key: 'tail', label: 'Cauda com Nadadeira', desc: 'Impulsiona o girino na água com movimentos ondulatórios.' }
+          ]
+        },
+        {
+          id: 2,
+          min: 0.30,
+          max: 0.52,
+          jumpTo: 0.41,
+          badge: 'Estágio 3 de 6',
+          timeLabel: 'Semanas 3 a 5',
+          title: 'Girino em Crescimento (Brânquias Internas)',
+          short: 'Brânquias passam a funcionar internamente; corpo cresce e ganha vigor.',
+          desc: 'Com o crescimento, uma dobra de pele (opérculo) recobre as brânquias, que passam a funcionar internamente. A água entra pela boca, banha as brânquias e sai por uma abertura lateral (espiráculo/sifão). O girino alimenta-se ativamente de algas e matéria orgânica.',
+          respiration: 'Branquial interna e cutânea (pele)',
+          diet: 'Herbívora (raspa algas e detritos)',
+          habitat: 'Totalmente aquático',
+          locomotion: 'Natação ágil com cauda musculosa',
+          pins: [
+            { key: 'body', label: 'Brânquias Internas', desc: 'Protegidas internamente; a água entra pela boca e sai pelo espiráculo lateral.' },
+            { key: 'tail', label: 'Cauda Natatória', desc: 'Principal órgão de propulsão durante toda a fase aquática.' }
+          ]
+        },
+        {
+          id: 3,
+          min: 0.52,
+          max: 0.72,
+          jumpTo: 0.62,
+          badge: 'Estágio 4 de 6',
+          timeLabel: 'Semanas 6 a 8',
+          title: 'Surgimento das Patas Traseiras',
+          short: 'Brotam os membros posteriores com membranas interdigitais.',
+          desc: 'Sob estímulo hormonal (tiroxina), inicia-se a transformação corporal visível: surgem primeiro as patas traseiras, que crescem articuladas e desenvolvem dedos ligados por membranas (úteis para nadar). Os pulmões também começam a se formar internamente.',
+          respiration: 'Branquial + início do desenvolvimento pulmonar',
+          diet: 'Herbívora / onívora (algas e pequenos detritos)',
+          habitat: 'Aquático (aproxima-se da superfície)',
+          locomotion: 'Natação com cauda e auxílio das patas',
+          pins: [
+            { key: 'hindLeg', label: 'Patas Traseiras', desc: 'São os primeiros membros a surgir, preparando o animal para o nado forte e o salto.' },
+            { key: 'tail', label: 'Cauda Longa', desc: 'Ainda intacta e essencial para a natação.' }
+          ]
+        },
+        {
+          id: 4,
+          min: 0.72,
+          max: 0.88,
+          jumpTo: 0.80,
+          badge: 'Estágio 5 de 6',
+          timeLabel: 'Semanas 9 a 11 (Clímax / Imago)',
+          title: 'Patas Dianteiras e Reabsorção da Cauda',
+          short: 'Surgem as patas dianteiras, pulmões assumem a respiração e a cauda regride.',
+          desc: 'No clímax da metamorfose, emergem as patas dianteiras, os olhos ficam salientes para visão fora da água e a boca se alarga. As brânquias regridem e os pulmões entram em funcionamento. A cauda é gradualmente reabsorvida pelo organismo, servindo como reserva de nutrientes enquanto o sistema digestório se adapta.',
+          respiration: 'Pulmonar e cutânea (brânquias regridem)',
+          diet: 'Transição (nutrientes da cauda reabsorvida)',
+          habitat: 'Semiaquático (sobe à margem/folhas)',
+          locomotion: 'Natação e primeiros saltos curtos',
+          pins: [
+            { key: 'frontLeg', label: 'Patas Dianteiras', desc: 'Ajudam a sustentar o corpo fora da água e amortecer os saltos.' },
+            { key: 'tail', label: 'Cauda em Reabsorção', desc: 'É digerida internamente e fornece energia durante a transição alimentar.' },
+            { key: 'lungs', label: 'Pulmões em Ação', desc: 'Substituem as brânquias para captar oxigênio do ar atmosférico.' }
+          ]
+        },
+        {
+          id: 5,
+          min: 0.88,
+          max: 1.01,
+          jumpTo: 0.96,
+          badge: 'Estágio 6 de 6',
+          timeLabel: 'Semana 12+ (Adulto)',
+          title: 'Rã Adulta',
+          short: 'Cauda totalmente reabsorvida; vida terrestre e aquática com respiração pulmonar e cutânea.',
+          desc: 'A metamorfose está completa! Sem cauda, com patas traseiras musculosas para saltar e pele fina, úmida e vascularizada, a rã vive em ambiente terrestre úmido e na água. Respira pelos pulmões (auxiliada pelo movimento do papo/região gular) e pela pele (respiração cutânea). Na fase adulta, torna-se carnívora e apta à reprodução.',
+          respiration: 'Pulmonar, cutânea (pele úmida) e gular',
+          diet: 'Carnívora (insetos e pequenos invertebrados)',
+          habitat: 'Terrestre úmido e aquático',
+          locomotion: 'Saltos em terra e natação na água',
+          pins: [
+            { key: 'skin', label: 'Pele Úmida (Cutânea)', desc: 'Fina e rica em vasos sanguíneos; realiza trocas gasosas e absorve água.' },
+            { key: 'lungs', label: 'Respiração Pulmonar/Gular', desc: 'O movimento oscilatório do papo ajuda a bombear ar para os pulmões.' },
+            { key: 'hindLeg', label: 'Patas Saltadoras', desc: 'Membros posteriores dobrados em Z garantem saltos potentes.' }
+          ]
+        }
+      ];
+
+      const QUIZ_DATA = [
+        {
+          q: '1. Por que dizemos que a rã possui desenvolvimento indireto?',
+          options: [
+            'Porque o filhote já nasce idêntico ao adulto.',
+            'Porque passa por uma fase larval (girino) e sofre metamorfose até virar adulto.',
+            'Porque a fecundação ocorre sempre dentro do útero da fêmea.'
+          ],
+          correct: 1,
+          explain: 'No desenvolvimento indireto, o animal eclode como larva (girino), muito diferente do adulto, e passa por metamorfose.'
+        },
+        {
+          q: '2. Como o girino e a rã adulta realizam a respiração, respectivamente?',
+          options: [
+            'Girino: brânquias e pele; Rã adulta: pulmões e pele úmida.',
+            'Girino: pulmões; Rã adulta: apenas brânquias.',
+            'Ambos respiram exclusivamente por traqueias.'
+          ],
+          correct: 0,
+          explain: 'Na fase aquática, o girino retira O₂ da água pelas brânquias (e pele). Na fase adulta, usa pulmões e respiração cutânea.'
+        },
+        {
+          q: '3. O que acontece com a cauda do girino no final da metamorfose?',
+          options: [
+            'Ela cai inteira no fundo da lagoa como uma folha seca.',
+            'Ela cresce ainda mais para ajudar a rã a saltar.',
+            'Ela é reabsorvida pelo corpo, servindo como reserva de nutrientes.'
+          ],
+          correct: 2,
+          explain: 'A cauda sofre reabsorção celular programada, fornecendo energia e nutrientes enquanto o animal adapta sua dieta.'
+        },
+        {
+          q: '4. Qual é o tipo de fecundação mais comum nas rãs e sapos?',
+          options: [
+            'Fecundação externa na água, durante o amplexo (abraço nupcial).',
+            'Fecundação interna com formação de ovo de casca dura.',
+            'Reprodução assexuada por brotamento.'
+          ],
+          correct: 0,
+          explain: 'A fêmea libera óvulos na água e o macho libera espermatozoides sobre eles (fecundação externa), formando ovos gelatinosos.'
+        },
+        {
+          q: '5. Qual animal abaixo apresenta desenvolvimento DIRETO (sem metamorfose)?',
+          options: [
+            'Borboleta',
+            'Sapo-cururu',
+            'Cachorro (mamífero)'
+          ],
+          correct: 2,
+          explain: 'Mamíferos, aves e répteis têm desenvolvimento direto: o filhote nasce semelhante ao adulto e não passa por fase larval.'
+        }
+      ];
+
+      // =========================================================
+      // 2. ESTADO DA SIMULAÇÃO
+      // =========================================================
+      const state = {
+        progress: 0.0,       // 0.0 a 1.0
+        playing: false,
+        speed: 1,
+        showPins: true,
+        projectorMode: false,
+        currentStageId: -1,
+        activeTab: 'metamorfose',
+        quizAnswers: {},
+        cameraPreset: 'overview'
+      };
+
+      // =========================================================
+      // 3. UTILIDADES DE INTERPOLAÇÃO
+      // =========================================================
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function smoothstep(edge0, edge1, x) {
+        const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+        return t * t * (3 - 2 * t);
+      }
+
+      // =========================================================
+      // 4. INICIALIZAÇÃO THREE.JS
+      // =========================================================
+      const canvasWrap = document.getElementById('canvas-wrap');
+      const fallbackEl = document.getElementById('webgl-fallback');
+      let renderer, scene, camera;
+      let animClock = 0;
+
+      // Camera orbit state
+      const camCtrl = {
+        theta: 0.65,
+        phi: 1.15,
+        radius: 9.2,
+        target: new THREE.Vector3(0, 0.3, 0),
+        goalTheta: 0.65,
+        goalPhi: 1.15,
+        goalRadius: 9.2,
+        goalTarget: new THREE.Vector3(0, 0.3, 0),
+        dragging: false,
+        lastX: 0,
+        lastY: 0
+      };
+
+      function setCameraPreset(name) {
+        state.cameraPreset = name;
+        if (name === 'overview') {
+          camCtrl.goalTheta = 0.65;
+          camCtrl.goalPhi = 1.12;
+          camCtrl.goalRadius = 9.4;
+          camCtrl.goalTarget.set(0, 0.2, 0);
+        } else if (name === 'focus') {
+          camCtrl.goalTheta = 0.55;
+          camCtrl.goalPhi = 1.18;
+          camCtrl.goalRadius = 4.6;
+          camCtrl.goalTarget.copy(creatureGroup.position);
+        } else if (name === 'underwater') {
+          camCtrl.goalTheta = 0.95;
+          camCtrl.goalPhi = 1.62;
+          camCtrl.goalRadius = 5.4;
+          camCtrl.goalTarget.set(-0.3, -0.9, 0);
+        } else if (name === 'surface') {
+          camCtrl.goalTheta = 0.35;
+          camCtrl.goalPhi = 1.05;
+          camCtrl.goalRadius = 5.0;
+          camCtrl.goalTarget.set(1.3, 0.65, 0.1);
+        }
+        document.querySelectorAll('.cam-btn').forEach(btn => {
+          const active = btn.dataset.cam === name;
+          btn.classList.toggle('bg-emerald-500/25', active);
+          btn.classList.toggle('text-emerald-200', active);
+          btn.classList.toggle('border-emerald-400/40', active);
+          btn.classList.toggle('text-slate-200', !active);
+          btn.classList.toggle('border-transparent', !active);
+        });
+      }
+
+      // Scene Objects
+      let waterMesh, waterGeo, waterBaseY;
+      const weeds = [];
+      const bubbles = [];
+      const fireflies = [];
+
+      // Creature Hierarchy
+      let eggClusterGroup, creatureGroup;
+      let bodyMesh, headGroup, jawMesh, throatMesh;
+      let eyeLeftGroup, eyeRightGroup, eyelidLeft, eyelidRight;
+      let gillLeftGroup, gillRightGroup;
+      let tailGroup, tailSegments = [], tailFinUpper, tailFinLower;
+      let hindLegLeft, hindLegRight, frontLegLeft, frontLegRight;
+      let spotMeshes = [];
+
+      // Pin anchor 3D objects
+      const pinAnchors = {};
+
+      // Materials that morph
+      let skinMat, bellyMat, finMat, gillMat, eggGelMat;
+
+      function initThree() {
+        if (typeof THREE === 'undefined') {
+          fallbackEl.classList.remove('hidden');
+          return false;
+        }
+        try {
+          renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          renderer.setSize(canvasWrap.clientWidth, canvasWrap.clientHeight);
+          renderer.shadowMap.enabled = true;
+          renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+          canvasWrap.insertBefore(renderer.domElement, canvasWrap.firstChild);
+        } catch (e) {
+          fallbackEl.classList.remove('hidden');
+          return false;
+        }
+
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0c2434, 0.028);
+
+        camera = new THREE.PerspectiveCamera(44, canvasWrap.clientWidth / canvasWrap.clientHeight, 0.1, 100);
+
+        // Lighting
+        const hemi = new THREE.HemisphereLight(0xdbeafe, 0x1e3a2f, 0.9);
+        scene.add(hemi);
+
+        const sun = new THREE.DirectionalLight(0xfffbeb, 1.15);
+        sun.position.set(6, 10, 5);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 1024;
+        sun.shadow.mapSize.height = 1024;
+        sun.shadow.camera.near = 1;
+        sun.shadow.camera.far = 26;
+        sun.shadow.camera.left = -7;
+        sun.shadow.camera.right = 7;
+        sun.shadow.camera.top = 7;
+        sun.shadow.camera.bottom = -7;
+        scene.add(sun);
+
+        const underFill = new THREE.PointLight(0x38bdf8, 0.55, 14);
+        underFill.position.set(-2, -1.5, 2);
+        scene.add(underFill);
+
+        buildPondEnvironment();
+        buildEggCluster();
+        buildCreature();
+        setupOrbitControls();
+
+        window.addEventListener('resize', onResize);
+        if (typeof ResizeObserver !== 'undefined') {
+          new ResizeObserver(onResize).observe(canvasWrap);
+        }
+
+        return true;
+      }
+
+      function onResize() {
+        if (!renderer || !camera) return;
+        const w = canvasWrap.clientWidth;
+        const h = canvasWrap.clientHeight;
+        if (w <= 0 || h <= 0) return;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+
+      function setupOrbitControls() {
+        const dom = renderer.domElement;
+        dom.addEventListener('pointerdown', (e) => {
+          camCtrl.dragging = true;
+          camCtrl.lastX = e.clientX;
+          camCtrl.lastY = e.clientY;
+        });
+        window.addEventListener('pointerup', () => { camCtrl.dragging = false; });
+        window.addEventListener('pointermove', (e) => {
+          if (!camCtrl.dragging) return;
+          const dx = e.clientX - camCtrl.lastX;
+          const dy = e.clientY - camCtrl.lastY;
+          camCtrl.lastX = e.clientX;
+          camCtrl.lastY = e.clientY;
+          camCtrl.goalTheta -= dx * 0.008;
+          camCtrl.goalPhi = clamp(camCtrl.goalPhi - dy * 0.007, 0.35, 2.05);
+        });
+        dom.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          camCtrl.goalRadius = clamp(camCtrl.goalRadius + e.deltaY * 0.006, 2.8, 16);
+        }, { passive: false });
+      }
+
+      // =========================================================
+      // 5. CENÁRIO DA LAGOA DIDÁTICA
+      // =========================================================
+      function buildPondEnvironment() {
+        // Sandy pond bed
+        const bedGeo = new THREE.CylinderGeometry(7.5, 8.2, 0.6, 40);
+        const bedMat = new THREE.MeshStandardMaterial({ color: 0x6b5b45, roughness: 0.95 });
+        const bed = new THREE.Mesh(bedGeo, bedMat);
+        bed.position.y = -2.4;
+        bed.receiveShadow = true;
+        scene.add(bed);
+
+        // Translucent underwater cylinder wall (diorama feel)
+        const basinGeo = new THREE.CylinderGeometry(7.45, 7.45, 2.2, 40, 1, true);
+        const basinMat = new THREE.MeshBasicMaterial({
+          color: 0x0e7490,
+          transparent: true,
+          opacity: 0.14,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const basin = new THREE.Mesh(basinGeo, basinMat);
+        basin.position.y = -1.1;
+        scene.add(basin);
+
+        // Water Surface (y = 0)
+        waterGeo = new THREE.CircleGeometry(7.45, 48);
+        waterGeo.rotateX(-Math.PI / 2);
+        waterBaseY = new Float32Array(waterGeo.attributes.position.count);
+        const waterMat = new THREE.MeshPhysicalMaterial({
+          color: 0x22d3ee,
+          transparent: true,
+          opacity: 0.38,
+          roughness: 0.12,
+          metalness: 0.05,
+          side: THREE.DoubleSide
+        });
+        waterMesh = new THREE.Mesh(waterGeo, waterMat);
+        waterMesh.position.y = 0;
+        scene.add(waterMesh);
+
+        // River stones on pond bed
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85 });
+        const stonePositions = [
+          [-2.8, -2.0, -1.6, 0.55], [-1.9, -2.05, 2.3, 0.42],
+          [0.5, -2.05, -2.9, 0.5], [-3.8, -1.95, 0.9, 0.62],
+          [2.8, -2.0, -2.1, 0.48], [-0.8, -2.08, 1.5, 0.32]
+        ];
+        stonePositions.forEach(([x, y, z, r]) => {
+          const g = new THREE.DodecahedronGeometry(r, 1);
+          const m = new THREE.Mesh(g, stoneMat);
+          m.position.set(x, y, z);
+          m.scale.set(1.2, 0.6, 1);
+          m.rotation.y = x * 1.3;
+          m.receiveShadow = true;
+          scene.add(m);
+        });
+
+        // Mossy Bank Rock (where adult frog rests)
+        const bankGroup = new THREE.Group();
+        bankGroup.position.set(2.4, -0.35, -0.4);
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x57534e, roughness: 0.9 });
+        const mossMat = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.85 });
+        const mainRock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 1), rockMat);
+        mainRock.scale.set(1.3, 0.65, 1.15);
+        mainRock.castShadow = true;
+        mainRock.receiveShadow = true;
+        bankGroup.add(mainRock);
+
+        const mossCap = new THREE.Mesh(new THREE.SphereGeometry(1.15, 16, 12), mossMat);
+        mossCap.position.set(0, 0.38, 0);
+        mossCap.scale.set(1.15, 0.25, 1.0);
+        mossCap.receiveShadow = true;
+        bankGroup.add(mossCap);
+        scene.add(bankGroup);
+
+        // Lily Pad (Vitória-régia) floating at y = 0.04
+        const lilyGroup = new THREE.Group();
+        lilyGroup.position.set(1.15, 0.04, 0.35);
+        const lilyShape = new THREE.Shape();
+        lilyShape.moveTo(0, 0);
+        lilyShape.absarc(0, 0, 1.15, 0.22, Math.PI * 2 - 0.22, false);
+        lilyShape.lineTo(0, 0);
+        const lilyGeo = new THREE.ExtrudeGeometry(lilyShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2 });
+        lilyGeo.rotateX(-Math.PI / 2);
+        const lilyMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.55 });
+        const lilyMesh = new THREE.Mesh(lilyGeo, lilyMat);
+        lilyMesh.castShadow = true;
+        lilyMesh.receiveShadow = true;
+        lilyGroup.add(lilyMesh);
+
+        // Small pink lotus flower on lily pad edge
+        const petalMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.4 });
+        const flowerGroup = new THREE.Group();
+        flowerGroup.position.set(0.65, 0.08, -0.48);
+        for (let i = 0; i < 6; i++) {
+          const p = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 6), petalMat);
+          const ang = (i / 6) * Math.PI * 2;
+          p.position.set(Math.cos(ang) * 0.1, 0.06, Math.sin(ang) * 0.1);
+          p.rotation.z = -Math.cos(ang) * 0.6;
+          p.rotation.x = Math.sin(ang) * 0.6;
+          flowerGroup.add(p);
+        }
+        lilyGroup.add(flowerGroup);
+        scene.add(lilyGroup);
+
+        // Aquatic Plants (Elodea)
+        const weedMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7 });
+        const weedCoords = [
+          [-3.2, -2.05, -0.6], [-2.9, -2.05, -0.3], [-2.5, -2.05, 1.9],
+          [-1.5, -2.05, -2.5], [0.4, -2.05, 2.7], [3.5, -2.05, 1.8]
+        ];
+        weedCoords.forEach(([x, y, z], idx) => {
+          const stem = new THREE.Group();
+          stem.position.set(x, y, z);
+          const height = 1.2 + (idx % 3) * 0.35;
+          for (let s = 0; s < 5; s++) {
+            const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), weedMat);
+            leaf.scale.set(0.5, 1.6, 0.25);
+            leaf.position.set(Math.sin(s) * 0.08, (s + 0.5) * (height / 5), Math.cos(s) * 0.08);
+            leaf.rotation.z = Math.sin(s * 1.5) * 0.35;
+            stem.add(leaf);
+          }
+          stem.userData.phase = idx * 1.1;
+          weeds.push(stem);
+          scene.add(stem);
+        });
+
+        // Rising Bubbles
+        const bubbleMat = new THREE.MeshPhysicalMaterial({
+          color: 0xe0f2fe,
+          transparent: true,
+          opacity: 0.55,
+          roughness: 0.1
+        });
+        for (let i = 0; i < 22; i++) {
+          const b = new THREE.Mesh(new THREE.SphereGeometry(0.03 + Math.random() * 0.04, 8, 8), bubbleMat);
+          b.position.set((Math.random() - 0.5) * 6, -2.0 + Math.random() * 1.9, (Math.random() - 0.5) * 6);
+          b.userData.speed = 0.28 + Math.random() * 0.35;
+          b.userData.offset = Math.random() * 10;
+          bubbles.push(b);
+          scene.add(b);
+        }
+
+        // Ambient Fireflies / Air Spores above water
+        const flyMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+        for (let i = 0; i < 12; i++) {
+          const f = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), flyMat);
+          f.position.set((Math.random() - 0.5) * 7, 0.4 + Math.random() * 2.2, (Math.random() - 0.5) * 7);
+          f.userData.base = f.position.clone();
+          f.userData.phase = Math.random() * Math.PI * 2;
+          fireflies.push(f);
+          scene.add(f);
+        }
+      }
+
+      // =========================================================
+      // 6. AGLOMERADO DE OVOS (ESTÁGIO 1)
+      // =========================================================
+      function buildEggCluster() {
+        eggClusterGroup = new THREE.Group();
+        eggClusterGroup.position.set(-1.6, -0.85, 0.35);
+
+        eggGelMat = new THREE.MeshPhysicalMaterial({
+          color: 0xe0f2fe,
+          transparent: true,
+          opacity: 0.45,
+          roughness: 0.15,
+          depthWrite: false
+        });
+        const embryoMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+
+        const offsets = [
+          [0, 0, 0], [0.22, 0.12, 0.1], [-0.22, 0.08, -0.1],
+          [0.12, -0.18, 0.18], [-0.14, -0.15, 0.2], [0.05, 0.22, -0.16],
+          [-0.25, -0.05, 0.12], [0.26, -0.08, -0.12], [0.0, -0.04, -0.24]
+        ];
+        offsets.forEach(([x, y, z], i) => {
+          const egg = new THREE.Group();
+          egg.position.set(x, y, z);
+          const gel = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 14), eggGelMat);
+          const emb = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), embryoMat);
+          emb.scale.set(1.2, 0.85, 0.85);
+          egg.add(gel);
+          egg.add(emb);
+          egg.userData.isHero = (i === 0);
+          eggClusterGroup.add(egg);
+        });
+
+        // Pin anchor for eggs
+        const eggAnchor = new THREE.Object3D();
+        eggAnchor.position.set(0, 0.32, 0);
+        eggClusterGroup.add(eggAnchor);
+        pinAnchors.egg = eggAnchor;
+
+        scene.add(eggClusterGroup);
+      }
+
+      // =========================================================
+      // 7. MODELO 3D ARTICULADO DO GIRINO -> RÃ
+      // =========================================================
+      function buildLeg(isHind) {
+        const root = new THREE.Group();
+        const thighLen = isHind ? 0.48 : 0.30;
+        const shinLen = isHind ? 0.50 : 0.30;
+        const radius = isHind ? 0.105 : 0.065;
+
+        const thighGroup = new THREE.Group();
+        const thigh = new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.15, radius * 0.85, thighLen, 12), skinMat);
+        thigh.position.y = -thighLen / 2;
+        thigh.castShadow = true;
+        thighGroup.add(thigh);
+
+        const kneeGroup = new THREE.Group();
+        kneeGroup.position.y = -thighLen;
+
+        const shin = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.85, radius * 0.55, shinLen, 12), skinMat);
+        shin.position.y = -shinLen / 2;
+        shin.castShadow = true;
+        kneeGroup.add(shin);
+
+        const footGroup = new THREE.Group();
+        footGroup.position.y = -shinLen;
+        const footSize = isHind ? 0.24 : 0.14;
+        const foot = new THREE.Mesh(new THREE.ConeGeometry(footSize * 0.65, footSize * 1.3, 5), skinMat);
+        foot.rotation.x = Math.PI / 2;
+        foot.scale.set(1.1, 1, 0.25);
+        foot.position.z = footSize * 0.45;
+        footGroup.add(foot);
+
+        kneeGroup.add(footGroup);
+        thighGroup.add(kneeGroup);
+        root.add(thighGroup);
+
+        root.userData = { thighGroup, kneeGroup, footGroup };
+        return root;
+      }
+
+      function buildCreature() {
+        creatureGroup = new THREE.Group();
+        creatureGroup.position.set(-1.6, -0.85, 0.35);
+
+        skinMat = new THREE.MeshStandardMaterial({ color: 0x3b3322, roughness: 0.42, metalness: 0.05 });
+        bellyMat = new THREE.MeshStandardMaterial({ color: 0xcbd5b1, roughness: 0.5 });
+        finMat = new THREE.MeshPhysicalMaterial({
+          color: 0x84cc16,
+          transparent: true,
+          opacity: 0.42,
+          roughness: 0.2,
+          side: THREE.DoubleSide
+        });
+        gillMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.45 });
+
+        // Main Torso / Body
+        const bodyGeo = new THREE.SphereGeometry(0.42, 24, 20);
+        bodyMesh = new THREE.Mesh(bodyGeo, skinMat);
+        bodyMesh.castShadow = true;
+        bodyMesh.receiveShadow = true;
+        creatureGroup.add(bodyMesh);
+
+        // Lighter Belly
+        const belly = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 14), bellyMat);
+        belly.position.set(0, -0.1, 0.02);
+        belly.scale.set(0.9, 0.72, 1.05);
+        bodyMesh.add(belly);
+
+        // Dorsal Spots (appear as frog matures)
+        spotMeshes = [];
+        const spotMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.6, transparent: true, opacity: 0 });
+        const spotCoords = [
+          [0.14, 0.32, -0.05, 0.08],
+          [-0.16, 0.30, -0.08, 0.07],
+          [0.08, 0.28, -0.22, 0.065],
+          [-0.10, 0.26, -0.24, 0.06]
+        ];
+        spotCoords.forEach(([x, y, z, r]) => {
+          const sp = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), spotMat);
+          sp.position.set(x, y, z);
+          sp.scale.set(1.1, 0.35, 1.3);
+          bodyMesh.add(sp);
+          spotMeshes.push(sp);
+        });
+
+        // Head Group
+        headGroup = new THREE.Group();
+        headGroup.position.set(0, 0.05, 0.28);
+        creatureGroup.add(headGroup);
+
+        // Throat / Gular sac (pulses when adult)
+        throatMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), bellyMat);
+        throatMesh.position.set(0, -0.14, 0.08);
+        throatMesh.scale.set(1.05, 0.65, 1.0);
+        headGroup.add(throatMesh);
+
+        // Eyes (bulge upward during metamorphosis)
+        function createEye(side) {
+          const eg = new THREE.Group();
+          eg.position.set(side * 0.22, 0.14, 0.12);
+          const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 14), new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.2 }));
+          const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 12), new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1 }));
+          pupil.position.set(side * 0.02, 0.01, 0.065);
+          pupil.scale.set(1.2, 0.7, 0.8);
+          const lid = new THREE.Mesh(new THREE.SphereGeometry(0.116, 12, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), skinMat);
+          lid.rotation.x = -Math.PI * 0.6;
+          eg.add(sclera);
+          eg.add(pupil);
+          eg.add(lid);
+          return { eg, lid };
+        }
+        const eL = createEye(-1);
+        const eR = createEye(1);
+        eyeLeftGroup = eL.eg; eyelidLeft = eL.lid;
+        eyeRightGroup = eR.eg; eyelidRight = eR.lid;
+        headGroup.add(eyeLeftGroup);
+        headGroup.add(eyeRightGroup);
+
+        // External Gills (Left & Right feathery branches)
+        function createGills(side) {
+          const gg = new THREE.Group();
+          gg.position.set(side * 0.30, 0.02, -0.02);
+          for (let i = 0; i < 3; i++) {
+            const branch = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.26, 6), gillMat);
+            branch.rotation.z = side * (-Math.PI / 2.3 + (i - 1) * 0.28);
+            branch.rotation.y = (i - 1) * 0.25;
+            branch.position.set(side * 0.10, (i - 1) * 0.045, -i * 0.02);
+            gg.add(branch);
+          }
+          return gg;
+        }
+        gillLeftGroup = createGills(-1);
+        gillRightGroup = createGills(1);
+        headGroup.add(gillLeftGroup);
+        headGroup.add(gillRightGroup);
+
+        // Articulated Tail (5 segments + translucent fin)
+        tailGroup = new THREE.Group();
+        tailGroup.position.set(0, 0, -0.34);
+        creatureGroup.add(tailGroup);
+
+        let parentSeg = tailGroup;
+        tailSegments = [];
+        for (let i = 0; i < 5; i++) {
+          const segGroup = new THREE.Group();
+          if (i > 0) segGroup.position.set(0, 0, -0.28);
+          const r1 = lerp(0.19, 0.04, i / 5);
+          const r2 = lerp(0.15, 0.015, i / 5);
+          const segMesh = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, 0.30, 10), skinMat);
+          segMesh.rotation.x = Math.PI / 2;
+          segMesh.position.z = -0.14;
+          segMesh.castShadow = true;
+          segGroup.add(segMesh);
+
+          // Fin membrane on each segment
+          const finH = lerp(0.24, 0.10, i / 5);
+          const finPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.30, finH), finMat);
+          finPlane.rotation.y = Math.PI / 2;
+          finPlane.position.set(0, 0.04, -0.14);
+          segGroup.add(finPlane);
+
+          parentSeg.add(segGroup);
+          tailSegments.push(segGroup);
+          parentSeg = segGroup;
+        }
+
+        // Hind Legs & Front Legs
+        hindLegLeft = buildLeg(true);
+        hindLegLeft.position.set(-0.28, -0.08, -0.22);
+        hindLegRight = buildLeg(true);
+        hindLegRight.position.set(0.28, -0.08, -0.22);
+        creatureGroup.add(hindLegLeft);
+        creatureGroup.add(hindLegRight);
+
+        frontLegLeft = buildLeg(false);
+        frontLegLeft.position.set(-0.26, -0.10, 0.18);
+        frontLegRight = buildLeg(false);
+        frontLegRight.position.set(0.26, -0.10, 0.18);
+        creatureGroup.add(frontLegLeft);
+        creatureGroup.add(frontLegRight);
+
+        // 3D Pin Anchors attached to creature parts
+        const mkAnchor = (parent, x, y, z) => {
+          const a = new THREE.Object3D();
+          a.position.set(x, y, z);
+          parent.add(a);
+          return a;
+        };
+        pinAnchors.gills = mkAnchor(gillRightGroup, 0.18, 0.12, 0);
+        pinAnchors.tail = mkAnchor(tailSegments[2], 0, 0.25, -0.1);
+        pinAnchors.body = mkAnchor(bodyMesh, 0, 0.48, 0.1);
+        pinAnchors.hindLeg = mkAnchor(hindLegRight, 0.15, -0.1, 0);
+        pinAnchors.frontLeg = mkAnchor(frontLegRight, 0.15, 0.05, 0.1);
+        pinAnchors.lungs = mkAnchor(headGroup, 0, 0.35, 0.15);
+        pinAnchors.skin = mkAnchor(bodyMesh, 0, 0.45, -0.05);
+
+        scene.add(creatureGroup);
+      }
+
+      // =========================================================
+      // 8. MORFOSE CONTÍNUA (0.0 -> 1.0)
+      // =========================================================
+      const cTadpole = new THREE.Color(0x3b3322);
+      const cMid = new THREE.Color(0x4d7c0f);
+      const cFrog = new THREE.Color(0x22c55e);
+
+      function updateMorphology(p, t) {
+        // 1. Egg Cluster visibility & hatching
+        const eggFade = 1 - smoothstep(0.10, 0.18, p);
+        eggClusterGroup.visible = eggFade > 0.01;
+        eggGelMat.opacity = 0.45 * eggFade;
+        eggClusterGroup.scale.setScalar(1 + Math.sin(t * 2.2) * 0.02);
+
+        // Creature emerges after 8%
+        const creatureVis = smoothstep(0.08, 0.14, p);
+        creatureGroup.visible = creatureVis > 0.01;
+
+        // 2. Color transition (Dark olive -> Moss -> Vibrant Frog Green)
+        if (p < 0.6) {
+          skinMat.color.lerpColors(cTadpole, cMid, smoothstep(0.35, 0.6, p));
+        } else {
+          skinMat.color.lerpColors(cMid, cFrog, smoothstep(0.6, 0.9, p));
+        }
+
+        // Dorsal spots appear in stages 5-6
+        const spotAlpha = smoothstep(0.72, 0.92, p) * 0.85;
+        spotMeshes.forEach(sp => { sp.material.opacity = spotAlpha; });
+
+        // 3. Body & Head Proportions
+        const frogFactor = smoothstep(0.55, 0.92, p);
+        const growthScale = lerp(0.55, 1.05, smoothstep(0.12, 0.55, p));
+        creatureGroup.scale.setScalar(growthScale * creatureVis);
+
+        bodyMesh.scale.set(
+          lerp(0.88, 1.05, frogFactor),
+          lerp(0.82, 0.78, frogFactor),
+          lerp(1.25, 1.12, frogFactor)
+        );
+
+        // Eyes bulge upward as frog prepares for air vision
+        const eyeBulge = smoothstep(0.68, 0.90, p);
+        eyeLeftGroup.position.set(-lerp(0.22, 0.18, eyeBulge), lerp(0.12, 0.24, eyeBulge), lerp(0.10, 0.16, eyeBulge));
+        eyeRightGroup.position.set(lerp(0.22, 0.18, eyeBulge), lerp(0.12, 0.24, eyeBulge), lerp(0.10, 0.16, eyeBulge));
+        const eyeScale = lerp(0.72, 1.15, eyeBulge);
+        eyeLeftGroup.scale.setScalar(eyeScale);
+        eyeRightGroup.scale.setScalar(eyeScale);
+
+        // Periodic blink in adult/imago
+        const blink = (eyeBulge > 0.5 && (t % 4.2) > 4.05) ? 0.1 : -Math.PI * 0.6;
+        eyelidLeft.rotation.x = blink;
+        eyelidRight.rotation.x = blink;
+
+        // Throat gular pulse in stages 5-6
+        const pulseAmt = smoothstep(0.76, 0.92, p);
+        throatMesh.scale.y = 0.65 + Math.sin(t * 5.2) * 0.18 * pulseAmt;
+
+        // 4. External Gills (peak in Stage 2: 0.14..0.32, retract by 0.40)
+        const gillGrowth = smoothstep(0.12, 0.20, p) * (1 - smoothstep(0.28, 0.40, p));
+        gillLeftGroup.visible = gillGrowth > 0.02;
+        gillRightGroup.visible = gillGrowth > 0.02;
+        gillLeftGroup.scale.setScalar(gillGrowth);
+        gillRightGroup.scale.setScalar(gillGrowth);
+        gillLeftGroup.rotation.y = Math.sin(t * 4) * 0.12;
+        gillRightGroup.rotation.y = -Math.sin(t * 4) * 0.12;
+
+        // 5. Tail Growth & Resorption (reabsorbed between 0.74 and 0.93)
+        const tailResorb = 1 - smoothstep(0.74, 0.93, p);
+        tailGroup.visible = tailResorb > 0.02;
+        tailGroup.scale.set(tailResorb, tailResorb, tailResorb);
+        finMat.opacity = 0.42 * tailResorb;
+
+        // Tail swimming undulation
+        const swimAmp = lerp(0.26, 0.06, frogFactor);
+        const swimFreq = lerp(7.5, 3.0, frogFactor);
+        tailSegments.forEach((seg, idx) => {
+          seg.rotation.y = Math.sin(t * swimFreq - idx * 0.65) * swimAmp;
+        });
+
+        // 6. Hind Legs (bud at 0.52, full by 0.72)
+        const hindGrowth = smoothstep(0.52, 0.72, p);
+        hindLegLeft.visible = hindGrowth > 0.02;
+        hindLegRight.visible = hindGrowth > 0.02;
+        hindLegLeft.scale.setScalar(hindGrowth);
+        hindLegRight.scale.setScalar(hindGrowth);
+
+        // Fold hind legs into Z-jumping posture as frog emerges
+        const landPosture = smoothstep(0.78, 0.92, p);
+        const swimKick = Math.sin(t * 5.5) * 0.25 * (1 - landPosture);
+        [hindLegLeft, hindLegRight].forEach((leg, i) => {
+          const side = i === 0 ? -1 : 1;
+          leg.rotation.z = side * lerp(0.35, 0.48, landPosture);
+          leg.userData.thighGroup.rotation.x = lerp(-0.85 + swimKick, -1.35, landPosture);
+          leg.userData.kneeGroup.rotation.x = lerp(1.1 - swimKick * 0.5, 2.35, landPosture);
+          leg.userData.footGroup.rotation.x = lerp(-0.2, -1.0, landPosture);
+        });
+
+        // 7. Front Legs (bud at 0.72, full by 0.86)
+        const frontGrowth = smoothstep(0.72, 0.86, p);
+        frontLegLeft.visible = frontGrowth > 0.02;
+        frontLegRight.visible = frontGrowth > 0.02;
+        frontLegLeft.scale.setScalar(frontGrowth);
+        frontLegRight.scale.setScalar(frontGrowth);
+
+        [frontLegLeft, frontLegRight].forEach((leg, i) => {
+          const side = i === 0 ? -1 : 1;
+          leg.rotation.z = side * lerp(0.3, 0.22, landPosture);
+          leg.userData.thighGroup.rotation.x = lerp(-0.3, -0.55, landPosture);
+          leg.userData.kneeGroup.rotation.x = lerp(0.4, 0.65, landPosture);
+        });
+
+        // 8. Creature Position & Path in the Pond
+        // 0..0.15: near egg cluster (-1.6, -0.85, 0.35)
+        // 0.15..0.75: swimming in gentle figure-8 underwater
+        // 0.75..0.95: swimming up onto the lily pad (1.15, 0.28, 0.35)
+        const swimPhase = smoothstep(0.14, 0.26, p) * (1 - smoothstep(0.78, 0.90, p));
+        const emergePhase = smoothstep(0.78, 0.92, p);
+
+        const swimX = -0.5 + Math.sin(t * 0.8) * 1.15;
+        const swimY = -0.85 + Math.sin(t * 1.3) * 0.18;
+        const swimZ = 0.2 + Math.sin(t * 1.6) * 0.65;
+
+        // Slight idle hop on lily pad when adult
+        const hopCycle = (p > 0.92) ? Math.max(0, Math.sin(t * 1.8) - 0.82) * 5.5 : 0;
+        const hopY = Math.sin(hopCycle * Math.PI) * 0.22;
+
+        const baseX = lerp(-1.6, swimX, smoothstep(0.12, 0.24, p));
+        const baseY = lerp(-0.85, swimY, smoothstep(0.12, 0.24, p));
+        const baseZ = lerp(0.35, swimZ, smoothstep(0.12, 0.24, p));
+
+        creatureGroup.position.set(
+          lerp(baseX, 1.12, emergePhase),
+          lerp(baseY, 0.34 + hopY, emergePhase),
+          lerp(baseZ, 0.35, emergePhase)
+        );
+
+        // Orientation: face swimming direction underwater, face camera/bank on lily pad
+        const nextSwimX = -0.5 + Math.sin((t + 0.05) * 0.8) * 1.15;
+        const nextSwimZ = 0.2 + Math.sin((t + 0.05) * 1.6) * 0.65;
+        const swimYaw = Math.atan2(nextSwimX - swimX, nextSwimZ - swimZ);
+        creatureGroup.rotation.y = lerp(swimYaw, -0.45, emergePhase);
+        creatureGroup.rotation.x = lerp(0, -0.22, emergePhase);
+      }
+
+      // =========================================================
+      // 9. ATUALIZAÇÃO DE UI E RÓTULOS 3D
+      // =========================================================
+      const pinsLayer = document.getElementById('pins-layer');
+      const pinToast = document.getElementById('pin-toast');
+      const pinToastTitle = document.getElementById('pin-toast-title');
+      const pinToastDesc = document.getElementById('pin-toast-desc');
+      let activePinElements = [];
+
+      function getStageForProgress(p) {
+        for (let i = 0; i < STAGES.length; i++) {
+          if (p >= STAGES[i].min && p < STAGES[i].max) return STAGES[i];
+        }
+        return STAGES[STAGES.length - 1];
+      }
+
+      function rebuildStagePins(stage) {
+        pinsLayer.innerHTML = '';
+        activePinElements = [];
+        if (!state.showPins) return;
+
+        stage.pins.forEach(pin => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'pin-marker px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-900/90 text-sky-200 border border-sky-400/60 shadow-lg hover:bg-sky-500 hover:text-slate-950 flex items-center gap-1';
+          btn.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span>${pin.label}</span>`;
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            pinToastTitle.textContent = pin.label;
+            pinToastDesc.textContent = pin.desc;
+            pinToast.classList.remove('hidden');
+          });
+          pinsLayer.appendChild(btn);
+          activePinElements.push({ el: btn, key: pin.key });
+        });
+      }
+
+      function updatePinPositions() {
+        if (!state.showPins || activePinElements.length === 0 || !camera) return;
+        const w = canvasWrap.clientWidth;
+        const h = canvasWrap.clientHeight;
+        const v = new THREE.Vector3();
+
+        activePinElements.forEach(({ el, key }) => {
+          const anchor = pinAnchors[key];
+          if (!anchor) {
+            el.style.display = 'none';
+            return;
+          }
+          anchor.getWorldPosition(v);
+          v.project(camera);
+          if (v.z > 1) {
+            el.style.display = 'none';
+          } else {
+            el.style.display = 'flex';
+            const x = (v.x * 0.5 + 0.5) * w;
+            const y = (-v.y * 0.5 + 0.5) * h;
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+          }
+        });
+      }
+
+      function updateUIForProgress() {
+        const pct = Math.round(state.progress * 100);
+        document.getElementById('hud-percent').textContent = `${pct}%`;
+        document.getElementById('timeline-slider').value = (state.progress * 100).toFixed(1);
+
+        const stage = getStageForProgress(state.progress);
+        if (stage.id !== state.currentStageId) {
+          state.currentStageId = stage.id;
+          document.getElementById('hud-stage-badge').textContent = stage.badge;
+          document.getElementById('hud-stage-title').textContent = stage.title;
+          document.getElementById('hud-stage-short').textContent = stage.short;
+
+          document.getElementById('detail-badge').textContent = stage.badge;
+          document.getElementById('detail-time').textContent = stage.timeLabel;
+          document.getElementById('detail-title').textContent = stage.title;
+          document.getElementById('detail-desc').textContent = stage.desc;
+
+          document.getElementById('stat-respiration').textContent = stage.respiration;
+          document.getElementById('stat-diet').textContent = stage.diet;
+          document.getElementById('stat-habitat').textContent = stage.habitat;
+          document.getElementById('stat-locomotion').textContent = stage.locomotion;
+
+          document.querySelectorAll('.stage-pill').forEach(pill => {
+            const active = Number(pill.dataset.stage) === stage.id;
+            pill.classList.toggle('bg-emerald-500/25', active);
+            pill.classList.toggle('text-emerald-200', active);
+            pill.classList.toggle('border-emerald-400/60', active);
+            pill.classList.toggle('bg-slate-800', !active);
+            pill.classList.toggle('text-slate-300', !active);
+            pill.classList.toggle('border-slate-700', !active);
+          });
+
+          pinToast.classList.add('hidden');
+          rebuildStagePins(stage);
+        }
+      }
+
+      // =========================================================
+      // 10. QUIZ INTERATIVO
+      // =========================================================
+      function renderQuiz() {
+        const container = document.getElementById('quiz-container');
+        container.innerHTML = '';
+        let score = 0;
+
+        QUIZ_DATA.forEach((item, qIdx) => {
+          const answered = state.quizAnswers[qIdx];
+          if (answered !== undefined && answered === item.correct) score++;
+
+          const card = document.createElement('div');
+          card.className = 'rounded-xl bg-slate-800/60 border border-slate-700 p-3 space-y-2';
+
+          const qTitle = document.createElement('p');
+          qTitle.className = 'text-xs font-bold text-white leading-snug';
+          qTitle.textContent = item.q;
+          card.appendChild(qTitle);
+
+          const optsWrap = document.createElement('div');
+          optsWrap.className = 'space-y-1.5';
+
+          item.options.forEach((optText, oIdx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            let cls = 'w-full text-left px-2.5 py-2 rounded-lg text-xs border transition ';
+            if (answered === undefined) {
+              cls += 'bg-slate-900/70 border-slate-700 text-slate-200 hover:bg-slate-700/60';
+            } else if (oIdx === item.correct) {
+              cls += 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 font-semibold';
+            } else if (oIdx === answered) {
+              cls += 'bg-rose-500/20 border-rose-400/60 text-rose-200';
+            } else {
+              cls += 'bg-slate-900/40 border-slate-800 text-slate-400';
+            }
+            btn.className = cls;
+            btn.textContent = optText;
+            btn.disabled = answered !== undefined;
+            btn.addEventListener('click', () => {
+              state.quizAnswers[qIdx] = oIdx;
+              renderQuiz();
+            });
+            optsWrap.appendChild(btn);
+          });
+          card.appendChild(optsWrap);
+
+          if (answered !== undefined) {
+            const fb = document.createElement('p');
+            const isRight = answered === item.correct;
+            fb.className = `text-[11px] leading-relaxed pt-1 ${isRight ? 'text-emerald-300' : 'text-amber-300'}`;
+            fb.textContent = (isRight ? '✓ Correto! ' : '✗ Atenção: ') + item.explain;
+            card.appendChild(fb);
+          }
+
+          container.appendChild(card);
+        });
+
+        document.getElementById('quiz-score').textContent = `${score} / ${QUIZ_DATA.length}`;
+      }
+
+      // =========================================================
+      // 11. EVENTOS DOS CONTROLES
+      // =========================================================
+      const btnPlay = document.getElementById('btn-play');
+      const playIcon = document.getElementById('play-icon');
+      const playText = document.getElementById('play-text');
+
+      function setPlaying(val) {
+        state.playing = val;
+        playIcon.textContent = val ? '⏸' : '▶';
+        playText.textContent = val ? 'Pausar' : 'Reproduzir';
+      }
+
+      btnPlay.addEventListener('click', () => {
+        if (state.progress >= 0.999 && !state.playing) {
+          state.progress = 0;
+        }
+        setPlaying(!state.playing);
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        setPlaying(false);
+        state.progress = 0;
+        updateUIForProgress();
+      });
+
+      document.getElementById('timeline-slider').addEventListener('input', (e) => {
+        setPlaying(false);
+        state.progress = clamp(parseFloat(e.target.value) / 100, 0, 1);
+        updateUIForProgress();
+      });
+
+      document.querySelectorAll('.stage-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          const st = STAGES[Number(pill.dataset.stage)];
+          if (!st) return;
+          setPlaying(false);
+          state.progress = st.jumpTo;
+          updateUIForProgress();
+        });
+      });
+
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.speed = parseFloat(btn.dataset.speed);
+          document.querySelectorAll('.speed-btn').forEach(b => {
+            const active = b === btn;
+            b.classList.toggle('bg-sky-500/30', active);
+            b.classList.toggle('text-sky-200', active);
+            b.classList.toggle('border', active);
+            b.classList.toggle('border-sky-400/40', active);
+            b.classList.toggle('text-slate-300', !active);
+          });
+        });
+      });
+
+      document.querySelectorAll('.cam-btn').forEach(btn => {
+        btn.addEventListener('click', () => setCameraPreset(btn.dataset.cam));
+      });
+
+      document.getElementById('btn-toggle-pins').addEventListener('click', () => {
+        state.showPins = !state.showPins;
+        document.getElementById('pins-label').textContent = state.showPins ? 'Rótulos 3D: Ligados' : 'Rótulos 3D: Ocultos';
+        pinToast.classList.add('hidden');
+        rebuildStagePins(getStageForProgress(state.progress));
+      });
+
+      document.getElementById('pin-toast-close').addEventListener('click', () => {
+        pinToast.classList.add('hidden');
+      });
+
+      document.getElementById('btn-projector').addEventListener('click', () => {
+        state.projectorMode = !state.projectorMode;
+        const drawer = document.getElementById('edu-drawer');
+        drawer.classList.toggle('hidden', state.projectorMode);
+        document.getElementById('projector-label').textContent = state.projectorMode ? 'Mostrar Painel' : 'Modo Projetor';
+        setTimeout(onResize, 40);
+      });
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.tab;
+          state.activeTab = target;
+          document.querySelectorAll('.tab-btn').forEach(b => {
+            const active = b === btn;
+            b.classList.toggle('border-emerald-400', active);
+            b.classList.toggle('text-emerald-300', active);
+            b.classList.toggle('bg-slate-900/70', active);
+            b.classList.toggle('border-transparent', !active);
+            b.classList.toggle('text-slate-400', !active);
+          });
+          document.querySelectorAll('.tab-panel').forEach(p => {
+            p.classList.toggle('hidden', p.id !== `panel-${target}`);
+          });
+        });
+      });
+
+      document.getElementById('btn-quiz-reset').addEventListener('click', () => {
+        state.quizAnswers = {};
+        renderQuiz();
+      });
+
+      // =========================================================
+      // 12. LOOP PRINCIPAL DE ANIMAÇÃO
+      // =========================================================
+      let lastTime = performance.now();
+
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
+        animClock += dt;
+
+        // Advance metamorphosis if playing
+        if (state.playing) {
+          state.progress += dt * 0.035 * state.speed;
+          if (state.progress >= 1) {
+            state.progress = 1;
+            setPlaying(false);
+          }
+          updateUIForProgress();
+        }
+
+        // Animate water surface ripples
+        if (waterGeo) {
+          const pos = waterGeo.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const z = pos.getZ(i);
+            const y = Math.sin(x * 1.4 + animClock * 1.8) * 0.025 + Math.cos(z * 1.6 + animClock * 1.4) * 0.02;
+            pos.setY(i, y);
+          }
+          pos.needsUpdate = true;
+          waterGeo.computeVertexNormals();
+        }
+
+        // Animate aquatic weeds
+        weeds.forEach(w => {
+          w.rotation.z = Math.sin(animClock * 1.3 + w.userData.phase) * 0.09;
+        });
+
+        // Animate bubbles
+        bubbles.forEach(b => {
+          b.position.y += b.userData.speed * dt;
+          b.position.x += Math.sin(animClock * 2 + b.userData.offset) * 0.002;
+          if (b.position.y > -0.08) {
+            b.position.y = -2.0;
+          }
+        });
+
+        // Animate fireflies
+        fireflies.forEach(f => {
+          f.position.x = f.userData.base.x + Math.sin(animClock * 0.9 + f.userData.phase) * 0.4;
+          f.position.y = f.userData.base.y + Math.cos(animClock * 1.3 + f.userData.phase) * 0.2;
+        });
+
+        // Update frog/tadpole morph
+        updateMorphology(state.progress, animClock);
+
+        // Smooth camera follow if in focus mode
+        if (state.cameraPreset === 'focus') {
+          const targetSrc = state.progress < 0.12 ? eggClusterGroup.position : creatureGroup.position;
+          camCtrl.goalTarget.copy(targetSrc);
+        }
+
+        camCtrl.theta = lerp(camCtrl.theta, camCtrl.goalTheta, 0.09);
+        camCtrl.phi = lerp(camCtrl.phi, camCtrl.goalPhi, 0.09);
+        camCtrl.radius = lerp(camCtrl.radius, camCtrl.goalRadius, 0.09);
+        camCtrl.target.lerp(camCtrl.goalTarget, 0.09);
+
+        camera.position.set(
+          camCtrl.target.x + camCtrl.radius * Math.sin(camCtrl.phi) * Math.sin(camCtrl.theta),
+          camCtrl.target.y + camCtrl.radius * Math.cos(camCtrl.phi),
+          camCtrl.target.z + camCtrl.radius * Math.sin(camCtrl.phi) * Math.cos(camCtrl.theta)
+        );
+        camera.lookAt(camCtrl.target);
+
+        renderer.render(scene, camera);
+        updatePinPositions();
+      }
+
+      // =========================================================
+      // 13. STARTUP
+      // =========================================================
+      window.addEventListener('load', () => {
+        renderQuiz();
+        updateUIForProgress();
+        if (initThree()) {
+          setCameraPreset('overview');
+          requestAnimationFrame(animate);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
